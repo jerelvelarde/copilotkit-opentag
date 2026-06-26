@@ -1,91 +1,73 @@
-# OpenTag — a Slack agent starter, built on CopilotKit
+# OpenTag — build a Slack agent with CopilotKit
 
-OpenTag is a **runnable Slack agent you can clone and make your own**. It's built on
-**[`@copilotkit/bot`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot)** —
-CopilotKit's SDK for building chat-platform agents (Slack first; the same code also runs on
-Discord, Telegram, and WhatsApp).
+Build a Slack agent with two packages:
 
-Out of the box it ships as an on-call triage assistant — @mention it in a thread and it
-answers, files issues, and renders charts inline — but that's just the example. The point is
-the **starting point**: a clean, real Slack agent you can bend to whatever your team needs.
+- **[`@copilotkit/bot`](https://www.npmjs.com/package/@copilotkit/bot)** — the platform-agnostic bot engine (`createBot`, `Thread`, tools, human-in-the-loop). [source](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot)
+- **[`@copilotkit/bot-slack`](https://www.npmjs.com/package/@copilotkit/bot-slack)** — the Slack adapter (Socket-Mode ingress, Block Kit egress, native streaming, modals, the assistant pane). [source](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-slack)
+
+Write your bot once; @mention it in a thread and it answers, calls your tools, renders rich
+Block Kit, and gates writes behind a human-in-the-loop confirm.
 
 ## See it in action
 
 https://github.com/user-attachments/assets/a74fa1cb-add0-463e-a23c-aa09b95d5135
 
-▶️ **[Watch the demo](https://github.com/user-attachments/assets/a74fa1cb-add0-463e-a23c-aa09b95d5135)** (~50s) — the agent working a Slack thread: it renders a breakdown, a table, and a bar chart inline (**generative UI**) and files a ticket only after an **Approve** gate (**human-in-the-loop**).
+▶️ **[Watch the demo](https://github.com/user-attachments/assets/a74fa1cb-add0-463e-a23c-aa09b95d5135)** (~50s) — a Slack agent built on these packages: generative UI (a breakdown, a table, a chart rendered inline) and a human-in-the-loop **Approve** gate before it files a ticket.
 
 > 🚀 **Building a real Slack agent?** The CopilotKit Slack bot SDK is in early access. **[Sign up for early access →](https://docs.copilotkit.ai/slack)** — or **[talk to an engineer](https://copilotkit.ai/talk-to-an-engineer)**.
 
-## Quick start
+## Quickstart
 
-OpenTag ships inside the [CopilotKit monorepo](https://github.com/CopilotKit/CopilotKit) as a
-first-class example (`examples/slack`) — that's the dependable way to run it today while the
-bot SDK packages finish publishing to npm. (A standalone `npm install` from this repo lights
-up the moment they land — see [setup.md](./setup.md).)
+Install the engine, the Slack adapter, and the JSX message vocabulary:
 
-You'll run two processes — the **agent** (the LLM backend) and the **bot** (the Slack
-connection) — and set three secrets.
-
-**1. Create a Slack app.** At [api.slack.com/apps](https://api.slack.com/apps?new_app=1) →
-*From a manifest* → paste [`slack-app-manifest.yaml`](./slack-app-manifest.yaml). Install it,
-then grab the **Bot User OAuth Token** (`xoxb-…`) and an **App-Level Token** (`xapp-…`, with the
-`connections:write` scope). Step-by-step in [setup.md](./setup.md#1-create-a-slack-app).
-
-**2. Set three secrets** in `.env` (`cp .env.example .env`):
-
-```bash
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
-OPENAI_API_KEY=sk-...
+```sh
+npm i @copilotkit/bot @copilotkit/bot-slack @copilotkit/bot-ui
 ```
 
-**3. Run it** from the CopilotKit monorepo root:
+Wire it up:
 
-```bash
-pnpm install
-pnpm --filter slack-example runtime   # the agent backend, on :8200
-pnpm --filter slack-example dev        # the bot
+```ts
+import { createBot } from "@copilotkit/bot";
+import {
+  slack,
+  defaultSlackTools,
+  defaultSlackContext,
+} from "@copilotkit/bot-slack";
+
+const bot = createBot({
+  adapters: [
+    slack({
+      botToken: process.env.SLACK_BOT_TOKEN!, // xoxb-…
+      appToken: process.env.SLACK_APP_TOKEN!, // xapp-… (Socket Mode)
+    }),
+  ],
+  agent: (threadId) => makeAgent(threadId), // your AG-UI agent (e.g. a CopilotKit runtime)
+  tools: [...defaultSlackTools, ...appTools], // lookup_slack_user + your tools
+  context: [...defaultSlackContext, ...appContext], // tagging / mrkdwn / thread guidance
+});
+
+bot.onMention(({ thread }) => thread.runAgent());
+
+await bot.start();
 ```
 
-**4. Talk to it.** @mention the bot in any channel thread:
+`makeAgent` builds your agent (any AG-UI agent — point it at a CopilotKit runtime), and
+`appTools` / `appContext` are your additions. The full walkthrough — creating the Slack app,
+the two tokens, and the agent backend — is in the
+**[CopilotKit Slack quickstart](https://docs.copilotkit.ai/slack)**.
 
-> @OpenTag summarize this thread and file it as a bug
+## A complete, runnable example
 
-That's the whole loop. To wire up Linear, Notion, inline charts, Redis persistence, or to run
-on Discord / Telegram / WhatsApp, see **[setup.md](./setup.md)**.
-
-## Make it your own
-
-OpenTag is deliberately small and hackable:
-
-- **Change what it does.** The agent's behavior is steered by a single system prompt in
-  [`runtime.ts`](./runtime.ts) — rewrite it and you have a different agent.
-- **Copy `app/` to start your own bot.** It's the platform-agnostic bot (tools, components, the
-  human-in-the-loop gate). `runtime.ts` is the agent backend: one CopilotKit `BuiltInAgent` (an
-  LLM + optional MCP tools — no Python, no LangGraph), served over AG-UI.
-- **One platform, or all of them.** `createBot` takes an array of adapters; set the secrets for
-  whichever platform(s) you want and the bot starts an adapter for each.
-
-The full architecture, the file-by-file map, and every integration live in
-**[setup.md](./setup.md)**.
+For an end-to-end bot wiring all of this against a real workspace — tools, rich cards, a Block
+Kit modal, the `confirm_write` gate, chart/diagram/table rendering, and slash commands — see
+**[`examples/slack`](https://github.com/CopilotKit/CopilotKit/tree/main/examples/slack)** in the
+CopilotKit monorepo.
 
 ## Going to production?
 
-OpenTag is the open, runnable starting point. When you're ready to ship an agent for real,
-**CopilotKit's managed Intelligence Platform** (coming soon) is the production layer beside your
-runtime — durable threads, persistence, hosted inspection, and **Continuous Learning from Human
-Feedback** (agents that improve with every interaction). Learn more about
-[CopilotKit Intelligence](https://www.copilotkit.ai/copilotkit-intelligence).
-
-- **[Sign up for Intelligence →](https://go.copilotkit.ai/enterprise-intelligence-platform)** — the managed production platform (coming soon).
-- **[Talk to an engineer →](https://copilotkit.ai/talk-to-an-engineer)** — building something real on this? We'd love to help you ship it.
-
-## Learn more
-
-The **[CopilotKit Slack quickstart](https://docs.copilotkit.ai/slack)** is the canonical guide
-to building a Slack agent — read it alongside this starter. Detailed setup and configuration
-lives in **[setup.md](./setup.md)**.
+When you're ready to ship for real, **CopilotKit's managed Intelligence Platform** (coming soon)
+is the production layer beside your runtime — durable threads, persistence, hosted inspection,
+and Continuous Learning from Human Feedback. **[Sign up for Intelligence →](https://go.copilotkit.ai/enterprise-intelligence-platform)** · **[Talk to an engineer →](https://copilotkit.ai/talk-to-an-engineer)**.
 
 ## License
 
