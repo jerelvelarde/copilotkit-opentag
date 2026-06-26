@@ -1,180 +1,189 @@
-# OpenTag — a get-started Slack bot, built on CopilotKit
+# OpenTag — a CopilotKit triage bot (Slack · Discord · Telegram · WhatsApp)
 
-OpenTag is the **open, get-started on-ramp** for building Slack bots with
-[CopilotKit](https://github.com/CopilotKit/CopilotKit). It's a thread-tagging
-assistant: @mention it (or run `/tag`) in a Slack thread and it reads the
-conversation, proposes a label (`bug` / `question` / `feature` / `docs` /
-`urgent`), and — after you click **Apply** — posts the tag as a rich card.
+OpenTag is a **runnable, on-call triage bot** built with
+[CopilotKit](https://github.com/CopilotKit/CopilotKit). @mention it in a thread
+and it turns incident chatter into tracked work: it pulls and files **Linear**
+issues, finds and writes **Notion** runbooks/postmortems, renders charts,
+diagrams, and tables inline, and gates every write behind a human-in-the-loop
+confirm.
 
-Clone it, add two Slack tokens and an OpenAI key, and you have a running bot in a
-couple of minutes. It's the minimal sibling of **Kite.dev** — the viral on-call
-triage bot — stripped to the smallest thing that still teaches the whole shape of
-a CopilotKit bot. (More on that [below](#where-this-leads).)
+**One app, any platform — or all at once.** `createBot` takes an array of
+adapters; `app/index.ts` starts the Slack adapter when `SLACK_*` secrets are
+present, Discord when `DISCORD_*` are present, Telegram when `TELEGRAM_BOT_TOKEN`
+is present, and WhatsApp when `WHATSAPP_*` are present. Everything else in `app/`
+(tools, components, the `confirm_write` HITL gate, chart/diagram/table rendering)
+is platform-agnostic and shared verbatim.
+
+It's built on:
+
+- **[`@copilotkit/bot`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot)** — the platform-agnostic bot engine.
+- **[`@copilotkit/bot-slack`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-slack)** / **[`-discord`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-discord)** / **[`-telegram`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-telegram)** / **[`-whatsapp`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-whatsapp)** — the platform adapters.
+- **[`@copilotkit/bot-ui`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-ui)** — a cross-platform JSX vocabulary for rich messages (Block Kit on Slack, Components V2 on Discord, HTML on Telegram).
+- **[`@copilotkit/runtime`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/runtime)** — the AG-UI agent backend (`BuiltInAgent` = an LLM + MCP; no Python, no LangGraph).
 
 ## See it in action
 
 https://github.com/user-attachments/assets/a74fa1cb-add0-463e-a23c-aa09b95d5135
 
-▶️ **[Watch the demo](https://github.com/user-attachments/assets/a74fa1cb-add0-463e-a23c-aa09b95d5135)** (~50s) — a CopilotKit bot triaging GitHub issues in Slack: it renders a breakdown, a table, and a bar chart inline (**generative UI**) and files a Linear ticket only after an **Approve** gate (**human-in-the-loop**).
+▶️ **[Watch the demo](https://github.com/user-attachments/assets/a74fa1cb-add0-463e-a23c-aa09b95d5135)** (~50s) — the bot triaging issues in Slack: it renders a breakdown, a table, and a bar chart inline (**generative UI**) and files a ticket only after an **Approve** gate (**human-in-the-loop**).
 
-> The clip is **Kite**, the full on-call triage bot — the kitchen sink (GitHub
-> triage, charts and tables, Linear & Notion over MCP), all on the same
-> `@copilotkit/bot` engine that powers OpenTag. **OpenTag is the minimal starting
-> point**: those same two building blocks — a human-in-the-loop gate and
-> generative UI — on a single tag. Clone OpenTag, grow toward Kite (see
-> [Where this leads](#where-this-leads)).
+> [!IMPORTANT]
+> **This is a faithful port of CopilotKit's [`examples/slack`](https://github.com/CopilotKit/CopilotKit/tree/main/examples/slack).** It uses the modern (`0.1.x`) bot API — multi-adapter, modals, `respondTo`. A standalone `npm install` is **pending publish**: `@copilotkit/bot-telegram`, `-whatsapp`, and `-store-redis` aren't on npm yet, and the bot packages need a coherent `0.1.x` release. **Until then, run it from the [CopilotKit monorepo](https://github.com/CopilotKit/CopilotKit) as `examples/slack`** (`pnpm --filter slack-example dev`). The moment the packages publish, this repo's `npm install` lights up — see [Run it](#run-it).
 
-It's built on:
+## What it does
 
-- **[`@copilotkit/bot`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot)** — the platform-agnostic bot engine.
-- **[`@copilotkit/bot-slack`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-slack)** — the Slack adapter (Socket Mode; bundles `@slack/bolt`, no public URL needed).
-- **[`@copilotkit/bot-ui`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-ui)** — a cross-platform JSX vocabulary for rich messages.
-- **[`@copilotkit/runtime`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/runtime)** — the AG-UI agent backend (`BuiltInAgent` = an LLM; no Python, no LangGraph).
+It connects to **Linear** and **Notion** over MCP and can:
 
-## What it teaches
+- **Query Linear** — _"what's open in CPK this cycle?"_ → renders the issues as a rich card.
+- **File a Linear issue** — _"file this thread as a bug"_ → drafts it, asks you to **confirm**, then creates it.
+- **Find Notion pages** — _"find the runbook for the auth outage"_ → renders matching pages with links.
+- **Write a postmortem** — _"write this thread up as a Notion doc"_ → reads the thread, summarizes, **confirms**, then creates the page.
+- **Chart / diagram / table data** — drop a CSV and say _"chart revenue by month"_, _"diagram this incident flow"_, or _"show it as a table"_.
 
-In ~250 lines of `app/`, OpenTag shows the whole shape of a CopilotKit bot:
+Every write goes through a human-in-the-loop **`confirm_write`** gate: the agent
+must call that tool and wait for a Create/Cancel click before it performs any
+Linear/Notion write.
 
-| Concept                                                          | Where                                                   |
-| --------------------------------------------------------------- | ------------------------------------------------------- |
-| `createBot({ adapters, agent, tools, context, commands })`      | `app/index.ts`                                          |
-| The core turn loop — `bot.onMention` → `thread.runAgent()`      | `app/index.ts`                                          |
-| A `BotTool` that grounds the agent in the real conversation     | `app/tools/read-thread.ts`                              |
-| A generative-UI **render-tool** + JSX component                 | `app/tools/tag-card.tsx`, `app/components/tag-card.tsx` |
-| A blocking **human-in-the-loop** gate (`thread.awaitChoice`)    | `app/human-in-the-loop/confirm-tag.tsx`                 |
-| A slash command (`/tag`)                                        | `app/commands/index.ts`                                 |
-| The agent backend — one `BuiltInAgent` (LLM, no MCP) over AG-UI | `runtime.ts`                                            |
+## How it fits together
 
-## Quickstart
-
-```bash
-git clone https://github.com/jerelvelarde/opentag.git
-cd opentag
-npm install
-cp .env.example .env       # fill in SLACK_* + OPENAI_API_KEY (see below)
-
-# then, in two terminals:
-npm run runtime            # terminal 1 — the agent backend on :8200
-npm run dev                # terminal 2 — the bot
+```
+Slack / Discord / Telegram / WhatsApp ──@mention──▶  bot (app/)  ──AG-UI──▶  runtime (runtime.ts)
+                                                          │  BuiltInAgent (LLM)
+                                                          ├── Linear  MCP  (hosted)
+                                                          └── Notion  MCP  (sidecar)
 ```
 
-You need an `OPENAI_API_KEY` and your Slack app's two tokens (next section).
-Prefer `pnpm` or `yarn`? Both work — swap `npm` for your package manager.
+| Concept                                                            | Where                                                              |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `createBot({ adapters, agent, tools, context, commands })`         | `app/index.ts`                                                     |
+| Multi-adapter wiring (Slack/Discord/Telegram/WhatsApp, secret-gated) | `app/index.ts`                                                     |
+| `read_thread` — grounds the agent in the real conversation         | `app/tools/read-thread.ts`                                         |
+| Render-tools + JSX components (issue card/list, Notion pages)      | `app/tools/render-tools.tsx`, `app/components/`                    |
+| Chart / diagram / table rendering (Playwright → PNG)               | `app/tools/render-chart.tsx`, `render-diagram.tsx`, `render-table.tsx`, `app/render/` |
+| Status / incident / links showcase cards                           | `app/tools/showcase-tools.tsx`, `app/components/_status.ts`        |
+| Blocking **human-in-the-loop** gate (`confirm_write`)              | `app/human-in-the-loop/confirm-write.tsx`                          |
+| Slash commands (`/agent`, `/triage`, `/preview`, `/file-issue`)    | `app/commands/index.ts`                                            |
+| A Block Kit **modal** (`/file-issue`)                              | `app/modals/file-issue.tsx`                                        |
+| The agent backend — one `BuiltInAgent` (LLM + Linear/Notion MCP)   | `runtime.ts`                                                       |
 
-## 1. Create the Slack app
+- **`app/`** — the platform-agnostic bot. **This is the directory you copy to start your own bot.**
+- **`runtime.ts`** — the agent backend: a single CopilotKit `BuiltInAgent` (LLM + Linear/Notion MCP), served over AG-UI. No Python, no LangGraph.
+- **`e2e/`** — live test harnesses (the Slack harness is legacy/WIP; the Telegram harness is a manual-trigger smoke test — see [`e2e/TELEGRAM-README.md`](./e2e/TELEGRAM-README.md)).
 
-- Go to <https://api.slack.com/apps?new_app=1> → **From a manifest** → paste
-  [`slack-app-manifest.yaml`](./slack-app-manifest.yaml).
+## Run it
+
+Pieces: the **chat-platform app(s)** (created once), the optional **Notion MCP
+sidecar**, the **agent** (`runtime.ts`), and the **bot** (`app/`). Set up
+whichever platform(s) you want — the bot starts an adapter for each one whose
+secrets are present.
+
+### 1. Create the Slack app
+
+- <https://api.slack.com/apps?new_app=1> → **From a manifest** → paste
+  [`slack-app-manifest.yaml`](./slack-app-manifest.yaml). It declares all four
+  slash commands, the assistant pane, the `users:read.email` scope, and **Socket
+  Mode** (so the bot connects outbound — no public URL needed).
 - _OAuth & Permissions_ → **Install to Workspace** → copy the `xoxb-` **Bot User
   OAuth Token** → `SLACK_BOT_TOKEN`.
-- _Basic Information → App-Level Tokens_ → **Generate Token and Scopes** with the
+- _Basic Information → App-Level Tokens_ → generate one with the
   `connections:write` scope → copy the `xapp-` token → `SLACK_APP_TOKEN`.
 
-The manifest declares the `/tag` command, the assistant pane, and **Socket Mode**
-— so the bot connects outbound and needs no public URL.
+(Discord, Telegram, and WhatsApp setup is in [`.env.example`](./.env.example).)
 
-## 2. Try it
+### 2. Credentials
 
-@mention the bot in a channel thread, DM it, or run `/tag`:
-
-> @OpenTag tag this thread
-
-OpenTag reads the thread, proposes a label with a one-line rationale, and shows
-an **Apply / Cancel** card. Click **Apply** and it posts the applied tag.
-
-## How it works
-
-```
-Slack ──@mention──▶ bot (app/) ──AG-UI──▶ runtime (runtime.ts)
-                                            └─ BuiltInAgent (LLM)
+```bash
+cp .env.example .env
+# Fill in (set the platform(s) you want):
+#   SLACK_BOT_TOKEN / SLACK_APP_TOKEN          (to run on Slack)
+#   DISCORD_BOT_TOKEN / DISCORD_APP_ID         (to run on Discord)
+#   TELEGRAM_BOT_TOKEN                         (to run on Telegram)
+#   OPENAI_API_KEY  (or ANTHROPIC_API_KEY / GOOGLE_API_KEY + AGENT_MODEL)
+#   LINEAR_API_KEY          (linear.app → Settings → API → Personal API keys)
+#   NOTION_TOKEN            (notion.so → Settings → Connections → integrations)
+#   NOTION_MCP_AUTH_TOKEN   (any strong string; shared with the sidecar)
 ```
 
-- **`app/`** — the bot: `createBot` + the Slack adapter, the `read_thread` /
-  `tag_card` tools, the `confirm_tag` HITL gate, and the `/tag` command. **This
-  is the directory you copy to start your own bot.**
-- **`runtime.ts`** — the agent backend: a single CopilotKit `BuiltInAgent` (an
-  LLM) served over AG-UI. No Python, no LangGraph, no external services.
+Linear and Notion are independent — set only the ones you want; the agent wires
+up whichever credentials are present.
 
-The system prompt (`runtime.ts`) steers a strict order: **read → confirm →
-apply.**
+### 3. Install & run
 
-1. `read_thread` — fetches the conversation via `thread.getMessages()` so the
-   agent tags what was actually said.
-2. `confirm_tag` — posts an Apply/Cancel card and **blocks** on
-   `thread.awaitChoice(...)`, returning `{ confirmed }`. Applying a tag is a
-   write, so the agent may never skip this.
-3. `tag_card` — only after approval, renders the `<TagCard>` component to show
-   the applied tag.
+> **Today, run it from the monorepo.** Until the bot packages publish a coherent
+> `0.1.x` set, the dependable path is to run this code as `examples/slack` inside
+> the [CopilotKit monorepo](https://github.com/CopilotKit/CopilotKit) (it builds
+> the adapters from source via `workspace:*`):
+>
+> ```bash
+> pnpm install                              # repo root
+> pnpm --filter slack-example notion-mcp    # only if using Notion → http://127.0.0.1:3001/mcp
+> pnpm --filter slack-example runtime       # CopilotKit runtime on :8200, agent "triage"
+> pnpm --filter slack-example dev           # the bot (tsx watch app/index.ts)
+> ```
 
-### The human-in-the-loop gate
+**Standalone (once `@copilotkit/bot-*` publish):** `npm install` here, then:
 
-```tsx
-// app/human-in-the-loop/confirm-tag.tsx
-async handler({ label, rationale }, { thread }) {
-  const choice = await thread.awaitChoice<{ confirmed?: boolean }>(
-    <ConfirmTag label={label} rationale={rationale} />,
-  );
-  return choice?.confirmed
-    ? "The user APPROVED — apply the tag now by calling tag_card."
-    : "The user DECLINED — do not apply the tag; acknowledge briefly and stop.";
-}
+```bash
+npm run notion-mcp     # terminal 1 — only if using Notion
+npm run runtime        # terminal 2 — the agent backend on :8200
+npm run dev            # terminal 3 — the bot
 ```
 
-## Where this leads
+The chart/diagram renderers need a Chromium binary: `npx playwright install chromium`.
 
-OpenTag is the *minimal* starter. The same `@copilotkit/bot` engine powers
-**Kite.dev** — the on-call triage bot from the viral
-[OpenTag post](https://x.com/ataiiam/status/2070269772126937456) — which runs the
-full kitchen sink:
+### 4. Try it
 
-- **Multi-platform** — Slack **+ Discord + Telegram + WhatsApp** from one process
-  (one `createBot`, an array of adapters).
-- **Linear + Notion over MCP** — query issues, file bugs, find runbooks, write
-  postmortems — each write behind the same kind of HITL gate.
-- **Generative UI** — issue cards, charts (Chart.js → PNG), diagrams (Mermaid),
-  and tables, rendered natively per platform.
-- **Modals & ephemerals** — `/file-issue` opens a structured form; `/preview`
-  shows a private draft.
+@mention the bot in a channel thread, DM it, or run a slash command:
 
-The reference implementation lives in CopilotKit's monorepo:
-**[`examples/slack`](https://github.com/CopilotKit/CopilotKit/tree/main/examples/slack)**.
-OpenTag is "here's how you start"; Kite.dev is "here's everything it can do."
+> @OpenTag what are the open CPK issues this cycle?
+> @OpenTag file this thread as a bug in CPK
+> @OpenTag write this thread up as a Notion postmortem
+
+## Slash commands
+
+Four app-owned commands, registered via `createBot({ commands })`:
+
+- **`/agent <text>`** — a mention-free entry point; runs the agent with the command text.
+- **`/triage [note]`** — summarizes the conversation and proposes Linear issues to file.
+- **`/preview <title>`** — privately previews the issue the bot would file (only you see it); degrades to a DM where ephemerals aren't supported.
+- **`/file-issue`** — opens a structured Linear issue **modal**; degrades to a conversational flow on platforms without modals (e.g. Telegram).
+
+On Slack, all four must be declared under **Slash Commands** — the manifest already does this.
+
+## Files → charts, diagrams & tables
+
+Upload a file and the bot analyzes it: images and **PDFs** go straight to the
+model; CSV/JSON/text are decoded and handed over as text. The chart/diagram
+libraries load from a CDN into a **local** headless browser (override
+`CHART_JS_URL` / `MERMAID_URL`) — your data is rendered locally and never sent to
+a rendering service.
+
+> **PDFs and images need a vision/document-capable model.** The default
+> `openai/gpt-5.5` reads both natively, as do recent Claude and Gemini models.
+
+## Make it yours
+
+- **Change the taxonomy / prompt.** The triage behavior is steered entirely by the system prompt in `runtime.ts`.
+- **Run one platform, or all.** Set only the secrets for the platform(s) you want; `createBot` takes several adapters at once.
+- **Durable buttons.** Pass a `@copilotkit/bot-store-redis` store to `createBot` (`docker compose up -d` for a local Redis) so an Approve/Cancel click still resolves after a restart — see `app/demo-restart.tsx`.
+- **Swap the data sources.** Linear and Notion are wired in `runtime.ts` over MCP; point the transports at your own MCP servers.
+
+## Tests
+
+```bash
+npm test               # unit tests: read_thread, render tools, components, confirm_write, modals, commands
+npm run check-types    # tsc --noEmit
+```
+
+> The live-Slack e2e harness (`npm run e2e`) is being migrated to the new
+> `createBot` API and doesn't run against this code as-is. The Telegram harness
+> (`npm run e2e:telegram`) is a working manual-trigger smoke test — see
+> [`e2e/TELEGRAM-README.md`](./e2e/TELEGRAM-README.md).
 
 ## Learn more
 
 The official **[CopilotKit Slack quickstart](https://docs.copilotkit.ai/slack)**
 is the canonical guide to building a Slack bot — read it alongside this starter.
-
-## Make it yours
-
-- **Apply tags for real.** Today the "apply" is visual — the seam is the
-  `tag_card` tool handler in `app/tools/tag-card.tsx` (and the approval branch in
-  `confirm-tag.tsx`). Call your own system there: a GitHub Issues label, a Linear
-  update, a row in your DB.
-- **Change the taxonomy.** Edit the label list in the `runtime.ts` system prompt
-  and the colors in `app/components/tag-card.tsx`.
-- **Run it elsewhere.** Everything in `app/` is platform-agnostic — swap the
-  `slack()` adapter in `app/index.ts` for
-  [`@copilotkit/bot-discord`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-discord),
-  [`-telegram`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-telegram),
-  [`-whatsapp`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-whatsapp),
-  or [`-teams`](https://github.com/CopilotKit/CopilotKit/tree/main/packages/bot-teams)
-  and provide that platform's secrets. `createBot` also takes several adapters
-  at once.
-- **Durable buttons.** Pass a `@copilotkit/bot-store-redis` store to `createBot`
-  so an Apply/Cancel click still resolves after a restart.
-
-## Tests
-
-```bash
-npm test                   # unit tests: read_thread, tag_card, confirm_tag
-npm run check-types        # tsc --noEmit
-```
-
-## Roadmap
-
-`npx copilotkit create --framework opentag` — scaffold this starter in one
-command. (Coming soon; for now, clone this repo.)
 
 ## License
 
