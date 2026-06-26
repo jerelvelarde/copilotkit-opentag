@@ -15,7 +15,7 @@ https://github.com/user-attachments/assets/a74fa1cb-add0-463e-a23c-aa09b95d5135
 
 ▶️ **[Watch the demo](https://github.com/user-attachments/assets/a74fa1cb-add0-463e-a23c-aa09b95d5135)** (~50s) — the agent working a Slack thread: it renders a breakdown, a table, and a bar chart inline (**generative UI**) and files a ticket only after an **Approve** gate (**human-in-the-loop**).
 
-> 🚀 **Going to production?** CopilotKit's managed **Intelligence Platform** is coming soon — durable threads, persistence, and agents that learn from human feedback. **[Sign up for early access](https://go.copilotkit.ai/enterprise-intelligence-platform)** · **[Talk to an engineer](https://copilotkit.ai/talk-to-an-engineer)**.
+> 🚀 **Building a real Slack agent?** The CopilotKit Slack bot SDK is in early access. **[Sign up for early access →](https://docs.copilotkit.ai/slack)** — or **[talk to an engineer](https://copilotkit.ai/talk-to-an-engineer)**.
 
 ## Quick start
 
@@ -78,7 +78,7 @@ runtime — durable threads, persistence, hosted inspection, and **Continuous Le
 Feedback** (agents that improve with every interaction). Learn more about
 [CopilotKit Intelligence](https://www.copilotkit.ai/copilotkit-intelligence).
 
-- **[Sign up for Intelligence →](https://go.copilotkit.ai/enterprise-intelligence-platform)** — get early access to the managed platform.
+- **[Sign up for Intelligence →](https://go.copilotkit.ai/enterprise-intelligence-platform)** — the managed production platform (coming soon).
 - **[Talk to an engineer →](https://copilotkit.ai/talk-to-an-engineer)** — building something real on this? We'd love to help you ship it.
 
 ## Learn more
